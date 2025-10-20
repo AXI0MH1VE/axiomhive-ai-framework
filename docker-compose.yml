@@ -1,0 +1,317 @@
+version: '3.8'
+
+# AxiomHive AI Strategic Framework
+# Docker Compose Configuration for Production Deployment
+
+services:
+  # Main AxiomHive Application
+  axiomhive-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: axiomhive-core
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - AXIOMHIVE_ENV=production
+      - AXIOMHIVE_LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+      - REDIS_URL=redis://redis:6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+      - mongodb
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    networks:
+      - axiomhive-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Strategic Intelligence Worker
+  strategic-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: strategic-worker
+    restart: unless-stopped
+    environment:
+      - AXIOMHIVE_ENV=production
+      - WORKER_TYPE=strategic
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - axiomhive-network
+    deploy:
+      replicas: 2
+
+  # Prediction Engine Worker
+  prediction-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: prediction-worker
+    restart: unless-stopped
+    environment:
+      - AXIOMHIVE_ENV=production
+      - WORKER_TYPE=prediction
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./models:/app/models
+    networks:
+      - axiomhive-network
+    deploy:
+      replicas: 2
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: axiomhive-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=axiomhive
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=axiomhive
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    networks:
+      - axiomhive-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axiomhive"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: axiomhive-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - axiomhive-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MongoDB (Document Store)
+  mongodb:
+    image: mongo:7
+    container_name: axiomhive-mongodb
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=axiomhive
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+      - MONGO_INITDB_DATABASE=axiomhive
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    networks:
+      - axiomhive-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Celery Task Queue
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: axiomhive-celery
+    restart: unless-stopped
+    command: celery -A core.celery worker -l info -Q strategic,prediction,execution
+    environment:
+      - AXIOMHIVE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+      - ./data:/app/data
+    networks:
+      - axiomhive-network
+    deploy:
+      replicas: 3
+
+  # Celery Beat (Scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: axiomhive-celery-beat
+    restart: unless-stopped
+    command: celery -A core.celery beat -l info
+    environment:
+      - AXIOMHIVE_ENV=production
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+    depends_on:
+      - redis
+      - postgres
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - axiomhive-network
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: axiomhive-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./static:/usr/share/nginx/html:ro
+    depends_on:
+      - axiomhive-core
+    networks:
+      - axiomhive-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: axiomhive-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - axiomhive-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: axiomhive-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - axiomhive-network
+
+  # Jaeger Distributed Tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: axiomhive-jaeger
+    restart: unless-stopped
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    networks:
+      - axiomhive-network
+
+  # ElasticSearch (Logs)
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: axiomhive-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - axiomhive-network
+
+  # Kibana (Log Visualization)
+  kibana:
+    image: kibana:8.11.0
+    container_name: axiomhive-kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - axiomhive-network
+
+networks:
+  axiomhive-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  mongodb-data:
+    driver: local
+  mongodb-config:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
