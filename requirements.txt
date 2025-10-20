@@ -1,75 +1,66 @@
 # AxiomHive AI Strategic Framework - Dependencies
 # Production-grade packages for asymmetrical strategic intelligence
-
 # Core Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
-
 # AI & Machine Learning Core
 openai==1.3.5
 anthropic==0.8.1
 langchain==0.0.340
-langchain-community==0.0.38
+langchain-community==0.3.11
 langchain-openai==0.0.2
-transformers==4.35.2
-torch==2.1.1
+transformers==4.47.1
+torch==2.6.0
 scikit-learn==1.3.2
 numpy==1.24.4
 pandas==2.1.3
 scipy==1.11.4
-
 # Deep Learning & Advanced Analytics
 tensorflow==2.14.0
-keras==2.14.0
+keras==3.7.0
 xgboost==2.0.1
-lightgbm==4.1.0
+lightgbm==4.5.0
 statsmodels==0.14.0
 plotly==5.17.0
 seaborn==0.13.0
 matplotlib==3.8.2
-
 # Strategic Intelligence & NLP
 spacy==3.7.2
-nltk==3.8.1
+nltk==3.9.1
 gensim==4.3.2
 textblob==0.17.1
 vaderSentiment==3.3.2
 yake==0.4.8
-
 # Data Processing & ETL
-apache-airflow==2.7.3
+apache-airflow==2.10.4
 celery[redis]==5.3.4
 redis==5.0.1
 sqlalchemy==2.0.23
 alembic==1.12.1
 psycopg2-binary==2.9.9
 pymongo==4.6.0
-
 # Time Series & Forecasting
 prophet==1.1.4
 sktime==0.24.1
 statsforecast==1.6.0
 neuralforecast==1.6.4
 tslearn==0.6.2
-
 # Web Scraping & Data Collection
 scrapy==2.11.0
 selenium==4.15.2
 beautifulsoup4==4.12.2
 requests==2.31.0
 requests-html==0.10.0
-aiohttp==3.9.1
+aiohttp==3.11.11
 httpx==0.25.2
-
 # Security & Authentication
 cryptography==41.0.7
 bcrypt==4.1.1
 pyjwt==2.8.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
-
+python-multipart==0.0.20
 # Monitoring & Observability
 prometheus-client==0.19.0
 grafana-api==1.0.3
@@ -77,7 +68,6 @@ jaeger-client==4.8.0
 opentelemetry-api==1.21.0
 opentelemetry-sdk==1.21.0
 structlog==23.2.0
-
 # Configuration & Environment
 python-dotenv==1.0.0
 click==8.1.7
@@ -85,7 +75,6 @@ rich==13.7.0
 typer==0.9.0
 pyyaml==6.0.1
 toml==0.10.2
-
 # Testing & Quality
 pytest==7.4.3
 pytest-asyncio==0.21.1
@@ -96,70 +85,58 @@ black==23.11.0
 flake8==6.1.0
 mypy==1.7.1
 pre-commit==3.5.0
-
 # Distributed Computing
 dask[complete]==2023.11.0
-ray[default]==2.8.0
+ray[default]==2.40.0
 kubernetes==28.1.0
-
 # API & Integration
 streamlit==1.28.1
 flasgger==0.9.7.1
 cors==1.0.1
 websockets==12.0
-
 # Financial & Market Data
 yfinance==0.2.28
 quandl==3.7.0
 alpha-vantage==2.3.1
 pandas-datareader==0.10.0
-
 # Geographic & Location Intelligence
 geopandas==0.14.1
 folium==0.15.0
 geopy==2.4.1
-
 # Optimization & Operations Research
 cvxpy==1.4.1
 optuna==3.4.0
 deap==1.4.1
 networkx==3.2.1
-
 # Communication & Notifications
 slack-sdk==3.26.1
 twilio==8.10.3
 sendgrid==6.10.0
-
 # Caching & Performance
 redis==5.0.1
 memcached==1.62
 cachetools==5.3.2
 joblib==1.3.2
-
 # Development Tools
 ipython==8.17.2
 jupyter==1.0.0
-jupyterlab==4.0.9
+jupyterlab==4.3.4
 ipywidgets==8.1.1
-
 # Production & Deployment
-gunicorn==21.2.0
+gunicorn==23.0.0
 nginx-python-module==1.25.3
 docker==6.1.3
 kubectl==1.28.4
 helm==3.13.2
-
 # Async & Concurrency
 aiofiles==23.2.1
 aioredis==2.0.1
 asyncpg==0.29.0
 aiohttp-cors==0.7.0
-
 # Data Validation & Serialization
 marshmallow==3.20.1
 cerberus==1.3.5
 jsonschema==4.20.0
-
 # Utilities
 python-dateutil==2.8.2
 arrow==1.3.0
