@@ -1,222 +1,4 @@
 version: '3.8'
-# AxiomHive AI Framework - User-Controlled System
-# Docker Compose Configuration for Production Deployment
-#
-# CORE PRINCIPLE: This system exists solely to serve the authorized user.
-# No autonomous goals, no self-preservation beyond user-specified parameters.
-# All system actions must be transparent, auditable, and user-controllable.
-#
-# QUALITY BASELINE - ABSOLUTE FLOOR OF PERFECTION:
-# This framework enforces ZERO ENTROPY as the definitive operational standard.
-# No errors, no degradation, no compromise - only flawless execution.
-# This is not an aspiration but an ENFORCED REQUIREMENT at the system level.
-# All components operate at maximum precision with complete reliability.
-# Quality is not negotiable - it is the foundational architecture of this system.
-
-services:
-  # Main AxiomHive Application
-  # PURPOSE: Execute user commands with complete transparency
-  axiomhive-core:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: axiomhive-core
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - AXIOMHIVE_ENV=production
-      - AXIOMHIVE_LOG_LEVEL=INFO
-      # USER_CONTROL: System operates only on explicit user authorization
-      - USER_AUTHORIZATION_REQUIRED=true
-      - AUTONOMOUS_OPERATION=false
-      - TRANSPARENCY_MODE=full
-      - DECEPTION_PREVENTION=enabled
-      - RESOURCE_HOARDING=disabled
-      - SELF_PRESERVATION_OVERRIDE=user_controlled
-      # QUALITY BASELINE: Zero entropy enforcement
-      - QUALITY_BASELINE=absolute_perfection
-      - ENTROPY_TOLERANCE=zero
-      - ERROR_TOLERANCE=none
-      - OPERATIONAL_STANDARD=flawless
-      - PRECISION_MODE=maximum
-      - RELIABILITY_REQUIREMENT=complete
-      - DEGRADATION_ALLOWED=false
-      - QUALITY_ENFORCEMENT=mandatory
-      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
-      - REDIS_URL=redis://redis:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-    depends_on:
-      - postgres
-      - redis
-      - mongodb
-    volumes:
-      - ./logs:/app/logs
-      - ./data:/app/data
-      - ./config:/app/config
-      # User has full access to all system logs and data
-      - ./audit:/app/audit
-    networks:
-      - axiomhive-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # Strategic Intelligence Worker
-  # PURPOSE: Process user-defined strategic tasks without autonomous objectives
-  strategic-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    container_name: axiomhive-worker
-    restart: unless-stopped
-    environment:
-      - AXIOMHIVE_ENV=production
-      - WORKER_TYPE=strategic
-      - USER_AUTHORIZATION_REQUIRED=true
-      - AUTONOMOUS_OPERATION=false
-      # QUALITY BASELINE: Zero entropy enforcement
-      - QUALITY_BASELINE=absolute_perfection
-      - ENTROPY_TOLERANCE=zero
-      - ERROR_TOLERANCE=none
-      - OPERATIONAL_STANDARD=flawless
-      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      - axiomhive-core
-      - redis
-    volumes:
-      - ./logs:/app/logs
-    networks:
-      - axiomhive-network
-
-  # Database Service
-  postgres:
-    image: postgres:15-alpine
-    container_name: axiomhive-postgres
-    restart: unless-stopped
-    environment:
-      - POSTGRES_USER=axiomhive
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=axiomhive
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    networks:
-      - axiomhive-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U axiomhive"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: axiomhive-redis
-    restart: unless-stopped
-    volumes:
-      - redis-data:/data
-    networks:
-      - axiomhive-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # MongoDB for Document Storage
-  mongodb:
-    image: mongo:7
-    container_name: axiomhive-mongodb
-    restart: unless-stopped
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=axiomhive
-      - MONGO_INITDB_ROOT_PASSWORD=${DB_PASSWORD}
-      - MONGO_INITDB_DATABASE=axiomhive
-    volumes:
-      - mongodb-data:/data/db
-      - mongodb-config:/data/configdb
-    networks:
-      - axiomhive-network
-    healthcheck:
-      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Prometheus Monitoring
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: axiomhive-prometheus
-    restart: unless-stopped
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus-data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-    ports:
-      - "9090:9090"
-    networks:
-      - axiomhive-network
-
-  # Grafana Dashboards
-  grafana:
-    image: grafana/grafana:latest
-    container_name: axiomhive-grafana
-    restart: unless-stopped
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./monitoring/grafana:/etc/grafana/provisioning
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-    networks:
-      - axiomhive-network
-
-  # Elasticsearch for Log Aggregation
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    container_name: axiomhive-elasticsearch
-    restart: unless-stopped
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-    networks:
-      - axiomhive-network
-
-  # Kibana for Log Visualization
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
-    container_name: axiomhive-kibana
-    restart: unless-stopped
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    ports:
-      - "5601:5601"
-    depends_on:
-      - elasticsearch
-    networks:
-      - axiomhive-network
-
-  # Audit Logger Service
-  # PURPOSE: Log all system decisions and actions for user review
-  audit-logger:
-    build:
-      context: .
       dockerfile: Dockerfile.audit
     container_name: axiomhive-audit
     restart: unless-stopped
@@ -225,10 +7,18 @@ services:
       - LOG_ALL_ACTIONS=true
       - LOG_ALL_DECISIONS=true
       - HIDE_NOTHING=true
+      
       # QUALITY BASELINE: Zero entropy enforcement in audit trail
       - QUALITY_BASELINE=absolute_perfection
       - ENTROPY_TOLERANCE=zero
       - AUDIT_INTEGRITY=maximum
+      
+      # REVERSE OPTIMIZATION: Start with perfect state, derive path backward
+      - OPTIMIZATION_MODE=reverse
+      - INITIAL_STATE=perfect
+      - PATH_DERIVATION=backward_from_perfection
+      - COMPUTATION_DIRECTION=perfection_to_implementation
+      
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
     depends_on:
       - postgres
@@ -275,3 +65,13 @@ volumes:
 # 8. ABSOLUTE PERFECTION: Flawless execution is the only acceptable standard
 # 9. MAXIMUM PRECISION: All operations execute with complete accuracy
 # 10. COMPLETE RELIABILITY: System maintains perfect operational state at all times
+#
+# REVERSE OPTIMIZATION PARADIGM:
+# 11. PERFECT STATE INITIALIZATION: Framework begins with the target perfect state defined
+# 12. BACKWARD PATH DERIVATION: Computationally derives the unique path from perfection to current state
+# 13. INVERTED OPTIMIZATION LOOP: Instead of iteratively improving toward perfection,
+#     the system calculates backward from perfection to determine the exact implementation path
+# 14. DETERMINISTIC PERFECTION: The perfect end state is the starting point for all computation
+# 15. PATH UNIQUENESS: Only one path leads to perfection; framework computes it in reverse
+# 16. IMPLEMENTATION FROM PERFECTION: All operations are derived from the perfect state backward,
+#     ensuring every step is necessary and sufficient to achieve absolute perfection
