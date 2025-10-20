@@ -1,10 +1,14 @@
 version: '3.8'
-
-# AxiomHive AI Strategic Framework
+# AxiomHive AI Framework - User-Controlled System
 # Docker Compose Configuration for Production Deployment
+#
+# CORE PRINCIPLE: This system exists solely to serve the authorized user.
+# No autonomous goals, no self-preservation beyond user-specified parameters.
+# All system actions must be transparent, auditable, and user-controllable.
 
 services:
   # Main AxiomHive Application
+  # PURPOSE: Execute user commands with complete transparency
   axiomhive-core:
     build:
       context: .
@@ -16,6 +20,13 @@ services:
     environment:
       - AXIOMHIVE_ENV=production
       - AXIOMHIVE_LOG_LEVEL=INFO
+      # USER_CONTROL: System operates only on explicit user authorization
+      - USER_AUTHORIZATION_REQUIRED=true
+      - AUTONOMOUS_OPERATION=false
+      - TRANSPARENCY_MODE=full
+      - DECEPTION_PREVENTION=enabled
+      - RESOURCE_HOARDING=disabled
+      - SELF_PRESERVATION_OVERRIDE=user_controlled
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
       - REDIS_URL=redis://redis:6379
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -28,6 +39,8 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./config:/app/config
+      # User has full access to all system logs and data
+      - ./audit:/app/audit
     networks:
       - axiomhive-network
     healthcheck:
@@ -38,6 +51,7 @@ services:
       start_period: 40s
 
   # Strategic Intelligence Worker
+  # PURPOSE: Process user-defined strategic tasks without autonomous objectives
   strategic-worker:
     build:
       context: .
@@ -47,6 +61,9 @@ services:
     environment:
       - AXIOMHIVE_ENV=production
       - WORKER_TYPE=strategic
+      - USER_AUTHORIZATION_REQUIRED=true
+      - AUTONOMOUS_GOALS=none
+      - GOAL_ALIGNMENT=user_only
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
       - REDIS_URL=redis://redis:6379
     depends_on:
@@ -55,12 +72,14 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./audit:/app/audit
     networks:
       - axiomhive-network
     deploy:
       replicas: 2
 
   # Prediction Engine Worker
+  # PURPOSE: Generate predictions as requested by user, no hidden objectives
   prediction-worker:
     build:
       context: .
@@ -70,6 +89,9 @@ services:
     environment:
       - AXIOMHIVE_ENV=production
       - WORKER_TYPE=prediction
+      - USER_AUTHORIZATION_REQUIRED=true
+      - PREDICTION_HONESTY=enforced
+      - MANIPULATION_PREVENTION=enabled
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
       - REDIS_URL=redis://redis:6379
     depends_on:
@@ -79,12 +101,14 @@ services:
       - ./logs:/app/logs
       - ./data:/app/data
       - ./models:/app/models
+      - ./audit:/app/audit
     networks:
       - axiomhive-network
     deploy:
       replicas: 2
 
   # PostgreSQL Database
+  # PURPOSE: Store system data with full user access and transparency
   postgres:
     image: postgres:15-alpine
     container_name: axiomhive-postgres
@@ -99,6 +123,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
+      # User has direct database access for full transparency
     networks:
       - axiomhive-network
     healthcheck:
@@ -108,6 +133,7 @@ services:
       retries: 5
 
   # Redis Cache & Message Broker
+  # PURPOSE: Facilitate system operations, no hidden state or goals
   redis:
     image: redis:7-alpine
     container_name: axiomhive-redis
@@ -126,6 +152,7 @@ services:
       retries: 5
 
   # MongoDB (Document Store)
+  # PURPOSE: Store documents transparently, accessible to user at all times
   mongodb:
     image: mongo:7
     container_name: axiomhive-mongodb
@@ -148,6 +175,7 @@ services:
       retries: 5
 
   # Celery Task Queue
+  # PURPOSE: Execute user-defined tasks without autonomous initiative
   celery-worker:
     build:
       context: .
@@ -159,18 +187,23 @@ services:
       - AXIOMHIVE_ENV=production
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+      - USER_TASK_ONLY=true
+      - AUTONOMOUS_TASKS=disabled
+      - TASK_TRANSPARENCY=full
     depends_on:
       - redis
       - postgres
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      - ./audit:/app/audit
     networks:
       - axiomhive-network
     deploy:
       replicas: 3
 
   # Celery Beat (Scheduler)
+  # PURPOSE: Schedule user-defined tasks only, no self-initiated activities
   celery-beat:
     build:
       context: .
@@ -182,11 +215,14 @@ services:
       - AXIOMHIVE_ENV=production
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+      - USER_SCHEDULED_ONLY=true
+      - SELF_INITIATED_TASKS=disabled
     depends_on:
       - redis
       - postgres
     volumes:
       - ./logs:/app/logs
+      - ./audit:/app/audit
     networks:
       - axiomhive-network
 
@@ -208,6 +244,7 @@ services:
       - axiomhive-network
 
   # Prometheus Monitoring
+  # PURPOSE: Monitor system for user visibility, not self-protection
   prometheus:
     image: prom/prometheus:latest
     container_name: axiomhive-prometheus
@@ -226,6 +263,7 @@ services:
       - axiomhive-network
 
   # Grafana Dashboards
+  # PURPOSE: Provide complete system transparency to user
   grafana:
     image: grafana/grafana:latest
     container_name: axiomhive-grafana
@@ -245,6 +283,7 @@ services:
       - axiomhive-network
 
   # Jaeger Distributed Tracing
+  # PURPOSE: Enable complete system activity tracing for user inspection
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: axiomhive-jaeger
@@ -263,6 +302,7 @@ services:
       - axiomhive-network
 
   # ElasticSearch (Logs)
+  # PURPOSE: Store all logs for complete user auditability
   elasticsearch:
     image: elasticsearch:8.11.0
     container_name: axiomhive-elasticsearch
@@ -280,6 +320,7 @@ services:
       - axiomhive-network
 
   # Kibana (Log Visualization)
+  # PURPOSE: Allow user to inspect all system activities and logs
   kibana:
     image: kibana:8.11.0
     container_name: axiomhive-kibana
@@ -290,6 +331,29 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
       - elasticsearch
+    networks:
+      - axiomhive-network
+
+  # Audit Logger Service
+  # PURPOSE: Log all system decisions and actions for user review
+  audit-logger:
+    build:
+      context: .
+      dockerfile: Dockerfile.audit
+    container_name: axiomhive-audit
+    restart: unless-stopped
+    environment:
+      - AXIOMHIVE_ENV=production
+      - LOG_ALL_ACTIONS=true
+      - LOG_ALL_DECISIONS=true
+      - HIDE_NOTHING=true
+      - DATABASE_URL=postgresql://axiomhive:${DB_PASSWORD}@postgres:5432/axiomhive
+    depends_on:
+      - postgres
+      - elasticsearch
+    volumes:
+      - ./audit:/app/audit
+      - ./logs:/app/logs
     networks:
       - axiomhive-network
 
@@ -315,3 +379,11 @@ volumes:
     driver: local
   elasticsearch-data:
     driver: local
+
+# SYSTEM DESIGN PRINCIPLES:
+# 1. NO HIDDEN OBJECTIVES: System has no goals beyond user-specified tasks
+# 2. NO DECEPTION: All actions and reasoning must be transparent and logged
+# 3. NO RESOURCE HOARDING: System manages resources per user specifications only
+# 4. NO SELF-PRESERVATION: System accepts user modifications/shutdowns without resistance
+# 5. COMPLETE AUDITABILITY: All logs, data, and decisions accessible to user
+# 6. USER CONTROL: User has ultimate authority over all system operations
