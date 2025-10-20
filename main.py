@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """AxiomHive AI Framework - Main Module
 
 Optimized AI agent framework with modular design, structured output support,
@@ -28,273 +29,298 @@ from abc import ABC, abstractmethod
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 # ============================================================================
 # MODULAR AGENT COMPONENTS
 # ============================================================================
 
 @dataclass
+class UsageTracker:
+    """Track API usage and costs.
+    
+    Structured Output:
+    {
+        "total_tokens": int,
+        "prompt_tokens": int,
+        "completion_tokens": int,
+        "estimated_cost": float,
+        "calls": int
+    }
+    """
+    total_tokens: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    estimated_cost: float = 0.0
+    calls: int = 0
+    
+    def log_usage(self, prompt_tokens: int, completion_tokens: int, cost_per_1k: float = 0.002) -> Dict[str, Any]:
+        """Log API usage and return structured output.
+        
+        Returns:
+            Dict: Usage statistics in JSON format
+        """
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
+        self.total_tokens = self.prompt_tokens + self.completion_tokens
+        self.estimated_cost += (self.total_tokens / 1000) * cost_per_1k
+        self.calls += 1
+        
+        return {
+            "total_tokens": self.total_tokens,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "estimated_cost": round(self.estimated_cost, 4),
+            "calls": self.calls
+        }
+    
+    def is_budget_exceeded(self, budget_limit: float) -> bool:
+        """Check if budget limit is exceeded.
+        
+        Returns:
+            bool: True if budget exceeded
+        """
+        return self.estimated_cost >= budget_limit
+    
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        return json.dumps({
+            "total_tokens": self.total_tokens,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "estimated_cost": round(self.estimated_cost, 4),
+            "calls": self.calls
+        })
+
+
+@dataclass
 class TaskConfig:
-    """Atomic task configuration - each task should be small and focused."""
-    task_id: str
-    description: str
+    """Configuration for agent tasks.
+    
+    Structured Output:
+    {
+        "max_tokens": int,
+        "temperature": float,
+        "budget_limit": float,
+        "enable_tracking": bool
+    }
+    """
     max_tokens: int = 1000
     temperature: float = 0.7
-    # Use structured output (JSON) for predictable parsing
-    output_format: str = "json"  # Options: "json", "text", "structured"
+    budget_limit: float = 1.0
+    enable_tracking: bool = True
 
 
 class Task(ABC):
-    """Abstract base class for atomic tasks.
-    
-    Each task should be:
-    - Atomic: Does one thing well
-    - Idempotent: Can be safely retried
-    - Stateless: No side effects between runs
-    """
-    
-    def __init__(self, config: TaskConfig):
-        self.config = config
-        self.result = None
+    """Abstract base class for modular tasks."""
     
     @abstractmethod
-    def execute(self) -> Dict[str, Any]:
-        """Execute the task and return structured output (JSON)."""
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """Execute the task and return structured output.
+        
+        Returns:
+            Dict: Task results in JSON-compatible format
+        """
         pass
     
     @abstractmethod
-    def validate(self) -> bool:
-        """Validate task configuration before execution."""
+    def validate_input(self, **kwargs) -> bool:
+        """Validate input parameters.
+        
+        Returns:
+            bool: True if valid
+        """
         pass
-
-
-class UsageTracker:
-    """Track API usage and costs for budget control.
-    
-    Example:
-        tracker = UsageTracker(budget_limit=5.00)
-        tracker.log_usage(tokens=1500, model="gpt-4")
-        if tracker.is_budget_exceeded():
-            raise BudgetExceededError()
-    """
-    
-    def __init__(self, budget_limit: float = None):
-        self.budget_limit = budget_limit
-        self.total_tokens = 0
-        self.total_cost = 0.0
-        self.usage_log = []
-    
-    def log_usage(self, tokens: int, model: str, cost: float = 0.0):
-        """Log API usage with token count and cost."""
-        self.total_tokens += tokens
-        self.total_cost += cost
-        self.usage_log.append({
-            "tokens": tokens,
-            "model": model,
-            "cost": cost,
-            "timestamp": self._get_timestamp()
-        })
-        logger.info(f"Usage logged: {tokens} tokens, ${cost:.4f}")
-    
-    def is_budget_exceeded(self) -> bool:
-        """Check if budget limit has been exceeded."""
-        if self.budget_limit is None:
-            return False
-        return self.total_cost >= self.budget_limit
-    
-    def get_usage_summary(self) -> Dict[str, Any]:
-        """Return structured usage summary as JSON-compatible dict."""
-        return {
-            "total_tokens": self.total_tokens,
-            "total_cost": self.total_cost,
-            "budget_limit": self.budget_limit,
-            "budget_remaining": self.budget_limit - self.total_cost if self.budget_limit else None,
-            "usage_log": self.usage_log
-        }
-    
-    @staticmethod
-    def _get_timestamp():
-        from datetime import datetime
-        return datetime.utcnow().isoformat()
 
 
 class Agent:
-    """Modular AI agent with pluggable components.
+    """Modular AI agent with budget control and structured output.
     
-    The agent orchestrates atomic tasks and manages resources with budget controls.
-    
-    Example:
-        agent = Agent(name="DataProcessor", max_tokens=2000)
-        agent.add_task(DataExtractionTask(config))
-        agent.add_task(DataValidationTask(config))
-        results = agent.run()  # Returns structured JSON output
+    Example usage:
+        agent = Agent(max_tokens=1000, budget_limit=0.50)
+        result = agent.execute_task(task, track_usage=True)
     """
     
     def __init__(self, 
-                 name: str,
-                 max_tokens: int = 5000,
-                 budget_limit: float = None):
-        self.name = name
-        self.max_tokens = max_tokens
-        self.tasks: List[Task] = []
-        self.usage_tracker = UsageTracker(budget_limit=budget_limit)
-        self.budget_callback: Optional[Callable] = None
-        logger.info(f"Agent '{name}' initialized with token limit: {max_tokens}")
+                 max_tokens: int = 1000, 
+                 budget_limit: float = 1.0,
+                 cost_per_1k: float = 0.002):
+        """Initialize agent with budget controls.
+        
+        Args:
+            max_tokens: Maximum tokens per request
+            budget_limit: Maximum cost limit in dollars
+            cost_per_1k: Cost per 1000 tokens
+        """
+        self.config = TaskConfig(max_tokens=max_tokens, budget_limit=budget_limit)
+        self.usage_tracker = UsageTracker()
+        self.cost_per_1k = cost_per_1k
+        self.budget_callback: Optional[Callable[[UsageTracker], None]] = None
+        logger.info(f"Agent initialized with budget limit: ${budget_limit}")
     
-    def add_task(self, task: Task):
-        """Add an atomic task to the agent's execution queue."""
-        if task.validate():
-            self.tasks.append(task)
-            logger.info(f"Task '{task.config.task_id}' added to agent '{self.name}'")
-        else:
-            raise ValueError(f"Task validation failed: {task.config.task_id}")
-    
-    def set_budget_callback(self, callback: Callable):
-        """Set callback function to be called when budget is exceeded."""
+    def set_budget_callback(self, callback: Callable[[UsageTracker], None]):
+        """Set callback for budget exceeded events.
+        
+        Args:
+            callback: Function to call when budget is exceeded
+        """
         self.budget_callback = callback
     
-    def run(self) -> Dict[str, Any]:
-        """Execute all tasks and return structured results (JSON format).
+    def check_budget(self) -> bool:
+        """Check if budget limit is exceeded.
         
         Returns:
-            Dict with structure:
+            bool: True if within budget
+        """
+        if self.usage_tracker.is_budget_exceeded(self.config.budget_limit):
+            if self.budget_callback:
+                self.budget_callback(self.usage_tracker)
+            logger.warning(f"Budget exceeded: ${self.usage_tracker.estimated_cost}")
+            return False
+        return True
+    
+    def execute_task(self, task: Task, track_usage: bool = True, **kwargs) -> Dict[str, Any]:
+        """Execute a task with budget control.
+        
+        Returns:
+            Dict: Structured output in JSON format:
             {
-                "agent": str,
                 "status": str,
-                "results": List[Dict],
-                "usage": Dict
+                "result": Any,
+                "usage": Dict[str, Any],
+                "within_budget": bool
             }
         """
-        results = []
+        if not task.validate_input(**kwargs):
+            return {
+                "status": "error",
+                "message": "Invalid input parameters",
+                "usage": json.loads(self.usage_tracker.to_json())
+            }
         
-        for task in self.tasks:
-            # Check budget before executing each task
-            if self.usage_tracker.is_budget_exceeded():
-                logger.warning(f"Budget exceeded, stopping execution")
-                if self.budget_callback:
-                    self.budget_callback(self.usage_tracker.get_usage_summary())
-                break
+        if not self.check_budget():
+            return {
+                "status": "error",
+                "message": "Budget limit exceeded",
+                "usage": json.loads(self.usage_tracker.to_json()),
+                "within_budget": False
+            }
+        
+        try:
+            result = task.execute(**kwargs)
             
-            try:
-                result = task.execute()
-                results.append({
-                    "task_id": task.config.task_id,
-                    "status": "success",
-                    "output": result  # Structured output from task
-                })
-            except Exception as e:
-                logger.error(f"Task '{task.config.task_id}' failed: {str(e)}")
-                results.append({
-                    "task_id": task.config.task_id,
-                    "status": "failed",
-                    "error": str(e)
-                })
-        
-        # Return structured JSON output
-        return {
-            "agent": self.name,
-            "status": "completed",
-            "results": results,
-            "usage": self.usage_tracker.get_usage_summary()
-        }
+            if track_usage:
+                # Simulate token usage (in production, get from API response)
+                prompt_tokens = kwargs.get('prompt_tokens', 100)
+                completion_tokens = kwargs.get('completion_tokens', 50)
+                usage_data = self.usage_tracker.log_usage(prompt_tokens, completion_tokens, self.cost_per_1k)
+                
+                logger.info(f"Task completed. Usage: {usage_data}")
+            
+            return {
+                "status": "success",
+                "result": result,
+                "usage": json.loads(self.usage_tracker.to_json()),
+                "within_budget": self.check_budget()
+            }
+        except Exception as e:
+            logger.error(f"Task execution failed: {str(e)}")
+            return {
+                "status": "error",
+                "message": str(e),
+                "usage": json.loads(self.usage_tracker.to_json())
+            }
 
 
 # ============================================================================
 # TODO: MULTI-AGENT CONFIGURATION
 # ============================================================================
 # TODO: Implement multi-agent orchestration system
-# TODO: - Create AgentCoordinator class to manage multiple agents
-# TODO: - Add inter-agent communication protocol (message passing)
-# TODO: - Implement agent discovery and registration mechanism
-# TODO: - Add conflict resolution for overlapping tasks
-# TODO: - Support hierarchical agent structures (supervisor/worker pattern)
-# TODO: - Implement shared state management across agents
-# TODO: - Add agent load balancing and task distribution
-
+# TODO: Add agent communication protocols (message passing, shared state)
+# TODO: Design task distribution mechanisms (load balancing, priority queues)
+# TODO: Create agent coordination strategies (consensus, voting, delegation)
+# TODO: Implement shared memory/state management (Redis, database)
+# TODO: Add agent role specialization (planner, executor, validator, monitor)
+# TODO: Design consensus mechanisms for multi-agent decisions
 
 # ============================================================================
 # TODO: BENCHMARKING AND PERFORMANCE MONITORING
 # ============================================================================
-# TODO: Implement comprehensive benchmarking suite
-# TODO: - Create Benchmark class for performance testing
-# TODO: - Add metrics: latency, throughput, token efficiency
-# TODO: - Implement A/B testing framework for agent configurations
-# TODO: - Add performance profiling (CPU, memory, API calls)
-# TODO: - Create dashboard for real-time monitoring
-# TODO: - Implement automated regression testing
-# TODO: - Add cost analysis and optimization recommendations
-# TODO: - Support benchmark result export (JSON, CSV formats)
+# TODO: Add performance metrics collection (latency, throughput, errors)
+# TODO: Implement request/response time tracking with percentiles
+# TODO: Create cost efficiency metrics (cost per task, ROI analysis)
+# TODO: Add memory usage profiling and leak detection
+# TODO: Implement automated performance testing suite
+# TODO: Create comparative analysis tools (A/B testing framework)
+# TODO: Add visualization dashboard for metrics (Grafana, custom UI)
+# TODO: Implement performance regression detection with alerts
 
 
 class ExampleTask(Task):
-    """Example implementation of an atomic task."""
+    """Example task implementation demonstrating modular design."""
     
-    def validate(self) -> bool:
-        """Validate task has required configuration."""
-        return bool(self.config.task_id and self.config.description)
-    
-    def execute(self) -> Dict[str, Any]:
-        """Execute task and return structured JSON output."""
-        logger.info(f"Executing task: {self.config.task_id}")
+    def validate_input(self, **kwargs) -> bool:
+        """Validate that required inputs are present.
         
-        # Return structured output for easy parsing
+        Returns:
+            bool: True if valid
+        """
+        return 'query' in kwargs
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        """Execute example task with structured output.
+        
+        Returns:
+            Dict: Structured JSON-compatible output
+        """
+        query = kwargs.get('query', '')
         return {
-            "task_id": self.config.task_id,
-            "result": "Task completed successfully",
+            "query": query,
+            "response": f"Processed: {query}",
             "metadata": {
-                "output_format": self.config.output_format,
-                "temperature": self.config.temperature
+                "task_type": "example",
+                "timestamp": "2025-10-20T06:19:00Z",
+                "output_format": "json"
             }
         }
 
 
-def main():
-    """Main entry point demonstrating modular agent usage."""
+if __name__ == "__main__":
+    # Example usage demonstrating all features
+    print("=" * 60)
+    print("AxiomHive AI Framework - Example Usage")
+    print("=" * 60)
     
     # Initialize agent with budget controls
-    agent = Agent(
-        name="ExampleAgent",
-        max_tokens=10000,
-        budget_limit=1.00  # $1.00 budget limit
+    agent = Agent(max_tokens=1000, budget_limit=0.50)
+    
+    # Set budget callback
+    def on_budget_exceeded(usage: UsageTracker):
+        logger.warning(f"Budget limit reached! Cost: ${usage.estimated_cost}")
+        print(f"\nWARNING: Budget exceeded at ${usage.estimated_cost}")
+    
+    agent.set_budget_callback(on_budget_exceeded)
+    
+    # Create and execute task
+    task = ExampleTask()
+    result = agent.execute_task(
+        task, 
+        track_usage=True,
+        query="Test query for AxiomHive framework",
+        prompt_tokens=100,
+        completion_tokens=50
     )
     
-    # Set budget exceeded callback
-    def handle_budget_exceeded(usage: Dict[str, Any]):
-        logger.warning(f"Budget exceeded! Total cost: ${usage['total_cost']:.2f}")
-        # Could send alert, save state, etc.
+    # Display structured output (JSON format)
+    print("\nTask Result (Structured JSON Output):")
+    print(json.dumps(result, indent=2))
     
-    agent.set_budget_callback(handle_budget_exceeded)
+    print("\nUsage Statistics:")
+    print(agent.usage_tracker.to_json())
     
-    # Create atomic tasks with structured output configuration
-    task1_config = TaskConfig(
-        task_id="task_001",
-        description="Example task 1",
-        output_format="json"  # Use JSON for structured output
-    )
-    task1 = ExampleTask(task1_config)
-    
-    task2_config = TaskConfig(
-        task_id="task_002",
-        description="Example task 2",
-        output_format="json"
-    )
-    task2 = ExampleTask(task2_config)
-    
-    # Add tasks to agent
-    agent.add_task(task1)
-    agent.add_task(task2)
-    
-    # Execute and get structured results
-    results = agent.run()
-    
-    # Output structured JSON results
-    print(json.dumps(results, indent=2))
-    
-    # Log usage summary
-    usage = results["usage"]
-    logger.info(f"Total tokens used: {usage['total_tokens']}")
-    logger.info(f"Total cost: ${usage['total_cost']:.4f}")
-
-
-if __name__ == "__main__":
-    main()
+    print("\n" + "=" * 60)
+    print("Features Demonstrated:")
+    print("✓ Modular agent design with ABC and dataclasses")
+    print("✓ Structured output in JSON format")
+    print("✓ API budget controls and cost tracking")
+    print("✓ TODO notes for multi-agent configuration")
+    print("✓ TODO notes for benchmarking and performance")
+    print("=" * 60)
