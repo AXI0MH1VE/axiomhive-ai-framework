@@ -1,0 +1,8 @@
+name: CDA Compliance
+on: [push, workflow_dispatch]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: test -f .github/CONSTITUTION.md && test -f .github/COMPLIANCE.md && echo "✅ Compliant"
